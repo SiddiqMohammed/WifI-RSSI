@@ -1,3 +1,5 @@
 Timestamp,Status,ResponseTime(ms),RSSI(dBm),BytesSent,BytesReceived,DownloadSpeed(Mbps),UploadSpeed(Mbps)
-2024-10-17 22:57:11,Connected,21.39,None,2358,5560,,
-2024-10-17 22:57:13,Connected,18.08,None,3699,6159,,
+2024-10-28 10:34:21,Connected,7.21,None,98,98,,
+2024-10-28 10:34:23,Connected,5.44,None,196,196,,
+2024-10-28 10:34:25,Connected,7.04,None,2890,508,,
+2024-10-28 10:34:27,Connected,6.52,None,3282,792,,
