@@ -1,22 +1,23 @@
 # main.py
 import time
 from datetime import datetime
-import threading
 from connectivity_monitor import ConnectivityMonitor
 from signal_strength import SignalStrengthMonitor
-# from gps_tracker import GPSTracker  # Commented out since GPS is removed
 from data_usage_monitor import DataUsageMonitor
 from speed_tester import SpeedTester
 
 # Initialize monitors
 connectivity_monitor = ConnectivityMonitor()
 signal_monitor = SignalStrengthMonitor()
-# gps_tracker = GPSTracker()  # Commented out since GPS is removed
 data_usage_monitor = DataUsageMonitor()
 speed_tester = SpeedTester()
 
 # Initialize start time
 start_time = time.time()
+
+# Initialize last known speeds
+last_download_speed = ''
+last_upload_speed = ''
 
 # Logging setup
 log_file = open('internet_monitor_log.csv', 'w')
@@ -24,7 +25,7 @@ log_file.write('Timestamp,Status,ResponseTime(ms),RSSI(dBm),BytesSent,BytesRecei
 
 # Speed test interval
 speedtest_interval = 600  # seconds
-last_speedtest_time = time.time()
+last_speedtest_time = time.time() - speedtest_interval  # Force initial speed test
 
 try:
     while True:
@@ -40,7 +41,19 @@ try:
         # Get data usage
         data_usage = data_usage_monitor.get_data_usage()
 
-        # Prepare log entry
+        # Run speed test at intervals
+        if (current_time - last_speedtest_time >= speedtest_interval) and (connectivity_data['status'] == 'Connected'):
+            speed_results = speed_tester.run_test()
+            if speed_results['download_speed'] is not None and speed_results['upload_speed'] is not None:
+                last_download_speed = round(speed_results['download_speed'], 2)
+                last_upload_speed = round(speed_results['upload_speed'], 2)
+                # Print the download and upload speeds to the console
+                print(f"Speed test results - Download: {last_download_speed} Mbps, Upload: {last_upload_speed} Mbps")
+            else:
+                print("Speed test failed or returned no data.")
+            last_speedtest_time = current_time
+
+        # Prepare log entry after speed test
         log_entry = {
             'timestamp': timestamp,
             'status': connectivity_data['status'],
@@ -48,40 +61,34 @@ try:
             'rssi': signal_strength,
             'bytes_sent': data_usage['bytes_sent'],
             'bytes_received': data_usage['bytes_received'],
-            'download_speed': '',
-            'upload_speed': ''
+            'download_speed': last_download_speed,
+            'upload_speed': last_upload_speed
         }
-
-        # Run speed test at intervals
-        if (current_time - last_speedtest_time >= speedtest_interval) and (connectivity_data['status'] == 'Connected'):
-            speed_results = speed_tester.run_test()
-            if speed_results['download_speed'] is not None and speed_results['upload_speed'] is not None:
-                log_entry['download_speed'] = round(speed_results['download_speed'], 2)
-                log_entry['upload_speed'] = round(speed_results['upload_speed'], 2)
-            else:
-                log_entry['download_speed'] = ''
-                log_entry['upload_speed'] = ''
-            last_speedtest_time = current_time
 
         # Write to log
         log_file.write('{timestamp},{status},{response_time},{rssi},{bytes_sent},{bytes_received},{download_speed},{upload_speed}\n'.format(**log_entry))
         log_file.flush()
 
-        # Print status to console
-        print(f"[{timestamp}] Status: {log_entry['status']}, Response Time: {log_entry['response_time']} ms, RSSI: {log_entry['rssi']} dBm")
+        # Prepare status message
+        status_message = (f"[{timestamp}] Status: {log_entry['status']}, "
+                          f"Response Time: {log_entry['response_time']} ms, "
+                          f"RSSI: {log_entry['rssi']} dBm, "
+                          f"Download Speed: {log_entry['download_speed']} Mbps, "
+                          f"Upload Speed: {log_entry['upload_speed']} Mbps")
 
-        time.sleep(connectivity_monitor.ping_interval)
+        # Print status to console
+        print(status_message)
+
         time.sleep(connectivity_monitor.ping_interval)
 
 except KeyboardInterrupt:
-    # Stop GPS tracker if it's being used
-    # gps_tracker.stop()  # Commented out since GPS is removed
-
+    # Move to the next line
+    print()
     # Close log file
     log_file.close()
 
     # Calculate total monitoring time
-    total_time = current_time - start_time
+    total_time = time.time() - start_time
 
     # Calculate packet loss percentage
     packet_loss_percentage = (connectivity_monitor.failed_pings / connectivity_monitor.total_pings) * 100 if connectivity_monitor.total_pings > 0 else 0
