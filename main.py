@@ -55,8 +55,12 @@ try:
         # Run speed test at intervals
         if (current_time - last_speedtest_time >= speedtest_interval) and (connectivity_data['status'] == 'Connected'):
             speed_results = speed_tester.run_test()
-            log_entry['download_speed'] = round(speed_results['download_speed'], 2)
-            log_entry['upload_speed'] = round(speed_results['upload_speed'], 2)
+            if speed_results['download_speed'] is not None and speed_results['upload_speed'] is not None:
+                log_entry['download_speed'] = round(speed_results['download_speed'], 2)
+                log_entry['upload_speed'] = round(speed_results['upload_speed'], 2)
+            else:
+                log_entry['download_speed'] = ''
+                log_entry['upload_speed'] = ''
             last_speedtest_time = current_time
 
         # Write to log
