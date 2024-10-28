@@ -1,4 +1,5 @@
 # main.py
+import os
 import time
 from datetime import datetime
 from connectivity_monitor import ConnectivityMonitor
@@ -19,12 +20,23 @@ start_time = time.time()
 last_download_speed = ''
 last_upload_speed = ''
 
+# Create a timestamped filename
+timestamp_for_filename = datetime.now().strftime('%Y%m%d_%H%M%S')
+filename = f'internet_monitor_log_{timestamp_for_filename}.csv'
+
+# Create logs directory if it doesn't exist
+logs_directory = 'logs'
+os.makedirs(logs_directory, exist_ok=True)
+
+# Full path to the log file
+file_path = os.path.join(logs_directory, filename)
+
 # Logging setup
-log_file = open('internet_monitor_log.csv', 'w')
+log_file = open(file_path, 'w')
 log_file.write('Timestamp,Status,ResponseTime(ms),RSSI(dBm),BytesSent,BytesReceived,DownloadSpeed(Mbps),UploadSpeed(Mbps)\n')
 
 # Speed test interval
-speedtest_interval = 600  # seconds
+speedtest_interval = 30 # seconds
 last_speedtest_time = time.time() - speedtest_interval  # Force initial speed test
 
 try:
