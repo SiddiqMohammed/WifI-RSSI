@@ -2,6 +2,8 @@
 import os
 import time
 from datetime import datetime
+import threading
+from threading import Lock
 from connectivity_monitor import ConnectivityMonitor
 from signal_strength import SignalStrengthMonitor
 from data_usage_monitor import DataUsageMonitor
@@ -20,6 +22,10 @@ start_time = time.time()
 last_download_speed = ''
 last_upload_speed = ''
 
+# Initialize speed test thread and lock
+speed_test_thread = None
+speed_test_lock = Lock()
+
 # Create a timestamped filename
 timestamp_for_filename = datetime.now().strftime('%Y%m%d_%H%M%S')
 filename = f'internet_monitor_log_{timestamp_for_filename}.csv'
@@ -36,8 +42,21 @@ log_file = open(file_path, 'w')
 log_file.write('Timestamp,Status,ResponseTime(ms),RSSI(dBm),BytesSent,BytesReceived,DownloadSpeed(Mbps),UploadSpeed(Mbps)\n')
 
 # Speed test interval
-speedtest_interval = 30 # seconds
+speedtest_interval = 30  # seconds
 last_speedtest_time = time.time() - speedtest_interval  # Force initial speed test
+
+def run_speed_test():
+    global last_download_speed, last_upload_speed, last_speedtest_time
+    speed_results = speed_tester.run_test()
+    with speed_test_lock:
+        if speed_results['download_speed'] is not None and speed_results['upload_speed'] is not None:
+            last_download_speed = round(speed_results['download_speed'], 2)
+            last_upload_speed = round(speed_results['upload_speed'], 2)
+            # Print the download and upload speeds to the console
+            print(f"Speed test results - Download: {last_download_speed} Mbps, Upload: {last_upload_speed} Mbps")
+        else:
+            print("Speed test failed or returned no data.")
+        last_speedtest_time = time.time()
 
 try:
     while True:
@@ -53,29 +72,27 @@ try:
         # Get data usage
         data_usage = data_usage_monitor.get_data_usage()
 
-        # Run speed test at intervals
+        # Run speed test at intervals in a separate thread
         if (current_time - last_speedtest_time >= speedtest_interval) and (connectivity_data['status'] == 'Connected'):
-            speed_results = speed_tester.run_test()
-            if speed_results['download_speed'] is not None and speed_results['upload_speed'] is not None:
-                last_download_speed = round(speed_results['download_speed'], 2)
-                last_upload_speed = round(speed_results['upload_speed'], 2)
-                # Print the download and upload speeds to the console
-                print(f"Speed test results - Download: {last_download_speed} Mbps, Upload: {last_upload_speed} Mbps")
+            if speed_test_thread is None or not speed_test_thread.is_alive():
+                # Start the speed test in a separate thread
+                speed_test_thread = threading.Thread(target=run_speed_test)
+                speed_test_thread.start()
             else:
-                print("Speed test failed or returned no data.")
-            last_speedtest_time = current_time
+                print("Speed test is already running.")
 
         # Prepare log entry after speed test
-        log_entry = {
-            'timestamp': timestamp,
-            'status': connectivity_data['status'],
-            'response_time': round(connectivity_data['response_time'] * 1000, 2) if connectivity_data['response_time'] else '',
-            'rssi': signal_strength,
-            'bytes_sent': data_usage['bytes_sent'],
-            'bytes_received': data_usage['bytes_received'],
-            'download_speed': last_download_speed,
-            'upload_speed': last_upload_speed
-        }
+        with speed_test_lock:
+            log_entry = {
+                'timestamp': timestamp,
+                'status': connectivity_data['status'],
+                'response_time': round(connectivity_data['response_time'] * 1000, 2) if connectivity_data['response_time'] else '',
+                'rssi': signal_strength,
+                'bytes_sent': data_usage['bytes_sent'],
+                'bytes_received': data_usage['bytes_received'],
+                'download_speed': last_download_speed,
+                'upload_speed': last_upload_speed
+            }
 
         # Write to log
         log_file.write('{timestamp},{status},{response_time},{rssi},{bytes_sent},{bytes_received},{download_speed},{upload_speed}\n'.format(**log_entry))
